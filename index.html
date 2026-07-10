@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yale SOM Fall Curriculum Planner (Sandbox Edition)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        yale: { blue: '#00356b', dark: '#1A1A1A', bg: '#F3F4F6', accent: '#286DC0' }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F4F5F7; margin: 0; padding: 0; }
+        .slide-container { width: 100%; max-width: 1280px; margin: 0 auto; background-color: #F4F5F7; min-height: 100vh; padding-bottom: 100px; }
+        .slide-header-bar { background-color: #00356b; border-left: 12px solid #002244; }
+        .track-content { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease-out; }
+        .track-content.expanded { grid-template-rows: 1fr; }
+        .track-inner { overflow: hidden; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px;}
+        .custom-scrollbar::-webkit-scrollbar-track { background: #F3F4F6; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        
+        /* Drag and Drop visual feedback */
+        .drag-over { border: 2px dashed #286DC0 !important; background-color: #EBF5FF !important; }
+        .sandbox-drag-over { border: 2px dashed #F59E0B !important; background-color: #FEF3C7 !important; }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="slide-container relative"></div>
+
+    <script>
+        const mandatoryCourses = [
+            { id: 10001, code: "MGT 636", title: "Managing Groups and Teams", session: "fall-1", schedule: "M 2:35 PM-5:35 PM", professor: "David M Munguia Gomez", credits: 2.0, theme: "Core", isMandatory: true },
+            { id: 10002, code: "MGT 633", title: "Global Leadership: Topics in Business & Society", session: "fall-2", schedule: "T Th 1:00 PM-2:20 PM", professor: "Robert Jensen", credits: 2.0, theme: "Core", isMandatory: true }
+        ];
+
+        // Deduplicated and translated dataset
+        const electiveCourses = [
+            {"code": "MGMT 7403", "title": "Modeling Operational Processes A", "session": "fall-1", "schedule": "W 4:10 PM-7:10 PM", "professor": "Rudi, Nils", "credits": 0.5, "theme": "Accounting & Operations", "category": "PhD", "id": 0}, 
+            {"code": "MGT 402", "title": "Basics of Accounting", "session": "fall-1", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Nakhmurina, Anya", "credits": 2.0, "theme": "Accounting & Operations", "category": "Core", "id": 1}, 
+            {"code": "MGT 403", "title": "Probability Modeling & Statistics", "session": "fall-1", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Zimmerman, Seth", "credits": 2.0, "theme": "Accounting & Operations", "category": "Core", "id": 2}, 
+            {"code": "MGT 404", "title": "Basics of Economics", "session": "fall-1", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Yang, Kai Hao", "credits": 2.5, "theme": "Finance & Economics", "category": "Core", "id": 3}, 
+            {"code": "MGT 409", "title": "AI Foundations for Managers", "session": "fall-1", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Zaman, Tauhid", "credits": 2.0, "theme": "Technology & AI", "category": "Core", "id": 4}, 
+            {"code": "MGT 537", "title": "Inequality and Social Mobility: Understanding Opportunity in the Age of AI", "session": "fall-1", "schedule": "T  Th 10:05 AM-11:25 AM", "professor": "Biasi, Barbara", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 5}, 
+            {"code": "MGT 538", "title": "Mastering Influence & Persuasion", "session": "fall-1", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Chance, Zoe", "credits": 2.0, "theme": "Strategy & Marketing", "category": "Elective", "id": 6}, 
+            {"code": "MGT 541", "title": "Corporate Finance", "session": "fall-1", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Tookes, Heather", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 7}, 
+            {"code": "MGT 559", "title": "Marketing Strategy", "session": "fall-1", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Shin, Jiwoong", "credits": 2.0, "theme": "Strategy & Marketing", "category": "Elective", "id": 8}, 
+            {"code": "MGT 582", "title": "The Future of Global Finance", "session": "fall-1", "schedule": "Th 1:00 PM-3:55 PM", "professor": "Garten, Jeffrey", "credits": 2.0, "theme": "Finance & Economics", "category": "MMS", "id": 9}, 
+            {"code": "MGT 600", "title": "GNW: AIM, Manila, Philippines", "session": "fall-1", "schedule": "TBD", "professor": "TBD", "credits": 1.5, "theme": "Technology & AI", "category": "Global Network", "id": 10}, 
+            {"code": "MGT 611", "title": "Policy Modeling", "session": "fall-1", "schedule": "T  Th 1:00 PM-2:20 PM", "professor": "Monachou, Faidra", "credits": 2.0, "theme": "Accounting & Operations", "category": "Elective", "id": 11}, 
+            {"code": "MGT 631", "title": "Public Health Entrepreneurship & Intrapreneurship ", "session": "fall-1", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Chahine, Teresa", "credits": 2.0, "theme": "Specific Industries", "category": "Elective", "id": 12}, 
+            {"code": "MGT 664", "title": "Direct-to-consumer Entrepreneurship", "session": "fall-1", "schedule": "T 2:35 PM-5:35 PM", "professor": "Joukovski, LJ", "credits": 2.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 13}, 
+            {"code": "MGT 671", "title": "Entrepreneurship through Acquisition", "session": "fall-1", "schedule": "T  Th 2:35 PM-3:55 PM", "professor": "Wasserstein, A.J.", "credits": 2.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 14}, 
+            {"code": "MGT 800", "title": "Crisis Management in Tech", "session": "fall-1", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Guarini, Kathryn", "credits": 2.0, "theme": "Technology & AI", "category": "Elective", "id": 15}, 
+            {"code": "MGT 805", "title": "Fixed Income Securities", "session": "fall-1", "schedule": "T  Th 2:35 PM-3:55 PM", "professor": "Majd, Saman", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 16}, 
+            {"code": "MGT 811", "title": "Taxes, Business & Strategy", "session": "fall-1", "schedule": "T  Th 2:35 PM-3:55 PM", "professor": "Zhang, Frank", "credits": 2.0, "theme": "Accounting & Operations", "category": "Elective", "id": 17}, 
+            {"code": "MGT 812", "title": "Financial Statement Analysis", "session": "fall-1", "schedule": "T  Th 1:00 PM-2:20 PM", "professor": "Zhang, Frank", "credits": 2.0, "theme": "Accounting & Operations", "category": "Elective", "id": 18}, 
+            {"code": "MGT 816", "title": "The Private Firm CFO: Accounting and Finance Strategies", "session": "fall-1", "schedule": "M  W 1:00 PM-2:20 PM", "professor": "Barrios, John", "credits": 2.0, "theme": "Accounting & Operations", "category": "Elective", "id": 19}, 
+            {"code": "MGT 829", "title": "Macroeconomic Implications of Globalization", "session": "fall-1", "schedule": "M  W 1:00 PM-2:20 PM", "professor": "Van Patten, Diana", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 20}, 
+            {"code": "MGT 838", "title": "Entrepreneurship in the Art Market", "session": "fall-1", "schedule": "M 4:10 PM-7:10 PM", "professor": "Resch, Magnus", "credits": 2.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 21}, 
+            {"code": "MGT 868", "title": "Living with Technology", "session": "fall-1", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Zauberman, Gal", "credits": 2.0, "theme": "Strategy & Marketing", "category": "Elective", "id": 22}, 
+            {"code": "MGT 887", "title": "Negotiations", "session": "fall-1", "schedule": "M 2:35 PM-5:35 PM", "professor": "Frey, Erin", "credits": 2.0, "theme": "Organizational Behavior & HR", "category": "Elective", "id": 23}, 
+            {"code": "MGT 895", "title": "International Real Estate", "session": "fall-1", "schedule": "T 4:10 PM-7:10 PM", "professor": "Gray, Kevin", "credits": 2.0, "theme": "Specific Industries", "category": "Elective", "id": 24}, 
+            {"code": "MGT 924", "title": "Statistical Foundations", "session": "fall-1", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Jensen, Theis", "credits": 2.0, "theme": "Accounting & Operations", "category": "MMS", "id": 25}, 
+            {"code": "MGT 946", "title": "Emerging Market Central Banking and Financial Stability ", "session": "fall-1", "schedule": "M  W 2:35 PM-3:35 PM", "professor": "Benediktsdottir, Sigga", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 26}, 
+            {"code": "MGT 979", "title": "GNAM: Omnichannel Strategy", "session": "fall-1", "schedule": "W 11:00 AM-1:00 PM", "professor": "Palacios, Hernan", "credits": 2.0, "theme": "Strategy & Marketing", "category": "Global Network", "id": 27}, 
+            {"code": "MGMT 7404", "title": "Modeling Operational Processes B", "session": "fall-2", "schedule": "F 9:00 AM-12:00 PM", "professor": "Lian, Zhen", "credits": 0.5, "theme": "Accounting & Operations", "category": "PhD", "id": 28}, 
+            {"code": "MGT 410", "title": "Competitor", "session": "fall-2", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Yang, Kai Hao", "credits": 2.0, "theme": "Strategy & Marketing", "category": "Core", "id": 29}, 
+            {"code": "MGT 411", "title": "Customer", "session": "fall-2", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Shin, Jiwoong", "credits": 2.0, "theme": "Strategy & Marketing", "category": "Core", "id": 30}, 
+            {"code": "MGT 412", "title": "Investor", "session": "fall-2", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Giglio, Stefano", "credits": 2.0, "theme": "Finance & Economics", "category": "Core", "id": 31}, 
+            {"code": "MGT 413", "title": "State & Society", "session": "fall-2", "schedule": "T  Th 8:30 AM-9:50 AM", "professor": "Mobarak, Mushfiq", "credits": 2.0, "theme": "Accounting & Operations", "category": "Core", "id": 32}, 
+            {"code": "MGT 529", "title": "Global Social Entrepreneurship: India", "session": "fall-2", "schedule": "W 2:35 PM-5:35 PM", "professor": "Ghosh, Asha", "credits": 2.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 33}, 
+            {"code": "MGT 532", "title": "Business Ethics", "session": "fall-2", "schedule": "T  Th 10:05 AM-11:25 AM", "professor": "Cusimano, Corey", "credits": 2.0, "theme": "Organizational Behavior & HR", "category": "Elective", "id": 34}, 
+            {"code": "MGT 642", "title": "Resolution of Systemically Important Banks", "session": "fall-2", "schedule": "M  W 4:10 PM-5:30 PM", "professor": "Gruenberg, Martin", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 35}, 
+            {"code": "MGT 647", "title": "Financial History in Yale Collections", "session": "fall-2", "schedule": "F 1:30 PM-5:30 PM", "professor": "Goetzmann, William", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 36}, 
+            {"code": "MGT 649", "title": "World Financial History", "session": "fall-2", "schedule": "T  Th 10:05 AM-11:25 AM", "professor": "Goetzmann, William", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 37}, 
+            {"code": "MGT 663", "title": "Innovation, Investments, and New Frontiers in Medicine", "session": "fall-2", "schedule": "T 2:35 PM-5:35 PM", "professor": "Knight, Stephen", "credits": 2.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 38}, 
+            {"code": "MGT 802", "title": "Large language models: technology and applications", "session": "fall-2", "schedule": "T  Th 1:00 PM-2:20 PM", "professor": "Jensen, Kyle", "credits": 2.0, "theme": "Technology & AI", "category": "Elective", "id": 39}, 
+            {"code": "MGT 808", "title": "Financial Computing", "session": "fall-2", "schedule": "Th 2:35 PM-5:35 PM", "professor": "Kurshan, Eren", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 40}, 
+            {"code": "MGT 809", "title": "Analytics in the Age of AI", "session": "fall-2", "schedule": "T  Th 1:00 PM-2:20 PM", "professor": "Lian, Zhen", "credits": 2.0, "theme": "Accounting & Operations", "category": "Elective", "id": 41}, 
+            {"code": "MGT 840", "title": "Stakeholders, Management, and Capitalism", "session": "fall-2", "schedule": "T 2:35 PM-5:35 PM", "professor": "Iwata, Jon", "credits": 2.0, "theme": "Strategy & Marketing", "category": "Elective", "id": 42}, 
+            {"code": "MGT 843", "title": "Private Equity: The Deal", "session": "fall-2", "schedule": "M 4:10 PM-7:10 PM", "professor": "Ma, Song", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 43}, 
+            {"code": "MGT 847", "title": "Private Equity: Leveraged Buyouts", "session": "fall-2", "schedule": "W 4:10 PM-7:10 PM", "professor": "Cascade, Joshua", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 44}, 
+            {"code": "MGT 871", "title": "Financial Reporting", "session": "fall-2", "schedule": "M  W 2:35 PM-3:55 PM", "professor": "Raghunandan, Aneesh", "credits": 2.0, "theme": "Accounting & Operations", "category": "Elective", "id": 45}, 
+            {"code": "MGT 880", "title": "Sales and Negotiation: Figure Out the Other Side", "session": "fall-2", "schedule": "W 8:30 AM-11:25 AM", "professor": "Cain, Daylian", "credits": 2.0, "theme": "Organizational Behavior & HR", "category": "Elective", "id": 46}, 
+            {"code": "MGT 897", "title": "Entrepreneurial Finance", "session": "fall-2", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Ma, Song", "credits": 2.0, "theme": "Technology & AI", "category": "Elective", "id": 47}, 
+            {"code": "MGT 900", "title": "Derivative Securities: Options, Futures, and Structured Products", "session": "fall-2", "schedule": "T  Th 2:35 PM-3:55 PM", "professor": "Majd, Saman", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 48}, 
+            {"code": "MGT 923", "title": "Asset Pricing Theory", "session": "fall-2", "schedule": "W 2:35 PM-5:35 PM", "professor": "Rosenbluth, Jeffrey", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 49}, 
+            {"code": "MGT 927", "title": "Financial Econometrics and Machine Learning", "session": "fall-2", "schedule": "F 8:30 AM-11:30 AM", "professor": "Kelly, Bryan", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 50}, 
+            {"code": "MGT 932", "title": "Financial Markets & Macroeconomic Policy", "session": "fall-2", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Simsek, Alp", "credits": 2.0, "theme": "Finance & Economics", "category": "Elective", "id": 51}, 
+            {"code": "MGT 950", "title": "GNAM: New Product Development", "session": "fall-2", "schedule": "T 8:00 AM-10:00 AM", "professor": "Shtub, Avraham", "credits": 2.0, "theme": "Others", "category": "Global Network", "id": 52}, 
+            {"code": "MGT 970", "title": "GNAM: The Changing Business Environment", "session": "fall-2", "schedule": "W 7:30 AM-10:30 AM", "professor": "Ghez, Jeremy", "credits": 2.0, "theme": "Society, Law & Environment", "category": "Global Network", "id": 53}, 
+            {"code": "MGT 975", "title": "GNAM: Chinese Business Law", "session": "fall-2", "schedule": "Th 9:00 PM-11:59 PM", "professor": "Tianlong, Lawrence", "credits": 3.0, "theme": "Society, Law & Environment", "category": "Global Network", "id": 54}, 
+            {"code": "MGT 981", "title": "GNAM: Investments and Value Creation in Global Sports", "session": "fall-2", "schedule": "M  W F 9:00 AM-11:00 AM", "professor": "Carlsson-Wall, Martin", "credits": 4.0, "theme": "Finance & Economics", "category": "Global Network", "id": 55}, 
+            {"code": "MGMT 7102", "title": "SeminarAccountingRsrch II", "session": "fall", "schedule": "F 1:15 PM-4:15 PM", "professor": "Thomas, Jake", "credits": 1.0, "theme": "Accounting & Operations", "category": "PhD", "id": 56}, 
+            {"code": "MGMT 7204", "title": "Financial Economics I", "session": "fall", "schedule": "M 4:10 PM-7:10 PM", "professor": "Giglio, Stefano", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 57}, 
+            {"code": "MGMT 7215", "title": "Corporate Finance", "session": "fall", "schedule": "Th 9:00 AM-12:00 PM", "professor": "Ma, Song", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 58}, 
+            {"code": "MGMT 7216", "title": "Macro Finance", "session": "fall", "schedule": "T 4:10 PM-7:10 PM", "professor": "Simsek, Alp", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 59}, 
+            {"code": "MGMT 7301", "title": "Behavioral Decision Making: Choice", "session": "fall", "schedule": "T 2:30 PM-5:30 PM", "professor": "Dhar, Ravi", "credits": 1.0, "theme": "Organizational Behavior & HR", "category": "PhD", "id": 60}, 
+            {"code": "MGMT 7304", "title": "Foundations of Behavioral Economics", "session": "fall", "schedule": "TBD", "professor": "Frederick, Shane", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 61}, 
+            {"code": "MGMT 7306", "title": "Current Topics in Judgement and Decision-Making", "session": "fall", "schedule": "Th 2:00 PM-6:00 PM", "professor": "Zauberman, Gal", "credits": 1.0, "theme": "Others", "category": "PhD", "id": 62}, 
+            {"code": "MGMT 7507", "title": "Organizations and Management I: Inside Organizations", "session": "fall", "schedule": "W 9:00 AM-12:00 PM", "professor": "Germano, Adriana", "credits": 1.0, "theme": "Organizational Behavior & HR", "category": "PhD", "id": 63}, 
+            {"code": "MGMT 7810", "title": "Ph.D. PreSeminar: Accounting", "session": "fall", "schedule": "TBD", "professor": "Watts, Edward", "credits": 1.0, "theme": "Accounting & Operations", "category": "PhD", "id": 64}, 
+            {"code": "MGMT 7811", "title": "Accounting Seminar", "session": "fall", "schedule": "TBD", "professor": "Watts, Edward", "credits": 1.0, "theme": "Accounting & Operations", "category": "PhD", "id": 65}, 
+            {"code": "MGMT 7820", "title": "Ph.D. PreSeminar: Financial Economics", "session": "fall", "schedule": "F 9:50 AM-11:00 AM", "professor": "Hampole, Menaka", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 66}, 
+            {"code": "MGMT 7821", "title": "Accounting/Finance Seminar", "session": "fall", "schedule": "F 11:10 AM-12:30 PM", "professor": "Hampole, Menaka", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 67}, 
+            {"code": "MGMT 7830", "title": "Ph.D. PreSeminar: Marketing", "session": "fall", "schedule": "Th 10:10 AM-11:20 AM", "professor": "Wang, Tong", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 68}, 
+            {"code": "MGMT 7831", "title": "Marketing Seminar", "session": "fall", "schedule": "Th 11:35 AM-12:50 PM", "professor": "Wang, Tong", "credits": 1.0, "theme": "Finance & Economics", "category": "PhD", "id": 69}, 
+            {"code": "MGMT 7840", "title": "Ph.D. PreSeminar: Operations", "session": "fall", "schedule": "T 11:45 AM-12:45 PM", "professor": "Monachou, Faidra", "credits": 1.0, "theme": "Accounting & Operations", "category": "PhD", "id": 70}, 
+            {"code": "MGMT 7841", "title": "Operations Seminar", "session": "fall", "schedule": "TBD", "professor": "Monachou, Faidra", "credits": 1.0, "theme": "Accounting & Operations", "category": "PhD", "id": 71}, 
+            {"code": "MGMT 7850", "title": "Ph.D. PreSeminar: Organizations & Management", "session": "fall", "schedule": "T 10:10 AM-11:30 AM", "professor": "Dannals, Jen", "credits": 1.0, "theme": "Organizational Behavior & HR", "category": "PhD", "id": 72}, 
+            {"code": "MGMT 7851", "title": "Organizations & Management Seminar", "session": "fall", "schedule": "T 11:40 AM-12:50 PM", "professor": "Dannals, Jen", "credits": 1.0, "theme": "Organizational Behavior & HR", "category": "PhD", "id": 73}, 
+            {"code": "MGT 401", "title": "Teams I (ManagingGroups&Teams)", "session": "fall", "schedule": "TBD", "professor": "Dannals, Jennifer", "credits": 2.0, "theme": "Organizational Behavior & HR", "category": "EMBA", "id": 74}, 
+            {"code": "MGT 406", "title": "Probability Modeling", "session": "fall", "schedule": "TBD", "professor": "Noonan, Patrick", "credits": 1.5, "theme": "Accounting & Operations", "category": "EMBA", "id": 75}, 
+            {"code": "MGT 407", "title": "Statistics", "session": "fall", "schedule": "TBD", "professor": "Schott, Peter", "credits": 1.5, "theme": "Accounting & Operations", "category": "EMBA", "id": 76}, 
+            {"code": "MGT 415", "title": "Leadership Development Practicum", "session": "fall", "schedule": "TBD", "professor": "Tate, David", "credits": 2.0, "theme": "Organizational Behavior & HR", "category": "EMBA", "id": 77}, 
+            {"code": "MGT 420", "title": "Workforce", "session": "fall", "schedule": "TBD", "professor": "Adler, Laura", "credits": 2.0, "theme": "Organizational Behavior & HR", "category": "EMBA", "id": 78}, 
+            {"code": "MGT 422", "title": "Operation Engine", "session": "fall", "schedule": "TBD", "professor": "Kim, Sang", "credits": 2.0, "theme": "Accounting & Operations", "category": "EMBA", "id": 79}, 
+            {"code": "MGT 510", "title": "Data Analysis and Causal Inference", "session": "fall", "schedule": "T  Th 2:35 PM-3:55 PM", "professor": "Jensen, Robert", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 80}, 
+            {"code": "MGT 524", "title": "Impact Practicum", "session": "fall", "schedule": "T 11:40 AM-12:50 PM", "professor": "Sheldon, Anthony", "credits": 4.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 81}, 
+            {"code": "MGT 525", "title": "Competitive Strategy", "session": "fall", "schedule": "TBD", "professor": "Marciano, Sonia", "credits": 2.0, "theme": "Strategy & Marketing", "category": "EMBA", "id": 82}, 
+            {"code": "MGT 527", "title": "Strategic Management of Nonprofit Organizations", "session": "fall", "schedule": "T  Th 8:30 AM-9:50 AM", "professor": "Chevalier, Judith", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 83}, 
+            {"code": "MGT 531", "title": "Interpersonal and Group Dynamics", "session": "fall", "schedule": "T 2:35 PM-5:35 PM", "professor": "Brooks, Heidi", "credits": 4.0, "theme": "Organizational Behavior & HR", "category": "Elective", "id": 84}, 
+            {"code": "MGT 533", "title": "Strategy, Innovation and Artificial Intelligence", "session": "fall", "schedule": "TBD", "professor": "Chalioti, Eva", "credits": 2.0, "theme": "Strategy & Marketing", "category": "EMBA", "id": 85}, 
+            {"code": "MGT 536", "title": "Urban Poverty and Economic Development", "session": "fall", "schedule": "T  Th 1:00 PM-2:20 PM", "professor": "Cooney, Kate", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 86}, 
+            {"code": "MGT 544", "title": "Investment Management", "session": "fall", "schedule": "TBD", "professor": "Giglio, Stefano", "credits": 2.0, "theme": "Finance & Economics", "category": "EMBA", "id": 87}, 
+            {"code": "MGT 558", "title": "Consumer Behavior", "session": "fall", "schedule": "M  W 1:00 PM-2:20 PM", "professor": "Klusowski, Joowon", "credits": 4.0, "theme": "Strategy & Marketing", "category": "Elective", "id": 88}, 
+            {"code": "MGT 563", "title": "Energy Systems Analysis", "session": "fall", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Rao, Narasimha", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 89}, 
+            {"code": "MGT 566", "title": "Pricing and Managing Sustainable Assets", "session": "fall", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Cort, Todd", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 90}, 
+            {"code": "MGT 567", "title": "Sustainable Systems", "session": "fall", "schedule": "TBD", "professor": "Cort, Todd", "credits": 2.0, "theme": "Technology & AI", "category": "EMBA", "id": 91}, 
+            {"code": "MGT 589", "title": "Competition Economics & Policy", "session": "fall", "schedule": "M  W 8:30 AM-9:50 AM", "professor": "Scott Morton, Fiona", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 92}, 
+            {"code": "MGT 592", "title": "Legal Context of Management", "session": "fall", "schedule": "TBD", "professor": "Kysar, Doug", "credits": 2.0, "theme": "Others", "category": "EMBA", "id": 93}, 
+            {"code": "MGT 595", "title": "Quantitative Investing", "session": "fall", "schedule": "T 8:30 AM-11:25 AM", "professor": "Moskowitz, Tobias", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 94}, 
+            {"code": "MGT 622", "title": "Game Theory", "session": "fall", "schedule": "T  Th 11:35 AM-12:50 PM", "professor": "Polak, Benjamin", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 95}, 
+            {"code": "MGT 626", "title": "Leadership Strategies for Music Presenters", "session": "fall", "schedule": "W 4:30 PM-9:00 PM", "professor": "Blocker, Robert", "credits": 4.0, "theme": "Organizational Behavior & HR", "category": "Elective", "id": 96}, 
+            {"code": "MGT 628", "title": "Central Banking", "session": "fall", "schedule": "M  W 1:05 PM-2:20 PM", "professor": "English, William", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 97}, 
+            {"code": "MGT 629", "title": "Ethical Choices in Public Leadership", "session": "fall", "schedule": "F 8:30 AM-11:15 AM", "professor": "Braverman, Eric", "credits": 4.0, "theme": "International", "category": "Elective", "id": 98}, 
+            {"code": "MGT 632", "title": "Housing Connecticut: Developing Healthy and Sustainable Neighborhoods", "session": "fall", "schedule": "F 9:30 AM-12:30 PM", "professor": "Cooney, Kate", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 99}, 
+            {"code": "MGT 634", "title": "Empirical Strategy with AI", "session": "fall", "schedule": "T  Th 10:05 AM-11:25 AM", "professor": "Williams, Kevin", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 100}, 
+            {"code": "MGT 646", "title": "Start-up Founder Practicum", "session": "fall", "schedule": "T 11:40 AM-12:50 PM", "professor": "McFadden, Jennifer", "credits": 4.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 101}, 
+            {"code": "MGT 650", "title": "Customer Insights and Applications", "session": "fall", "schedule": "W 5:45 PM-7:15 PM", "professor": "Ahmed, Treeny", "credits": 6.0, "theme": "Strategy & Marketing", "category": "Elective", "id": 102}, 
+            {"code": "MGT 656", "title": "Management of Software Development", "session": "fall", "schedule": "M  W 1:00 PM-2:20 PM", "professor": "Jensen, Kyle", "credits": 4.0, "theme": "Technology & AI", "category": "Elective", "id": 103}, 
+            {"code": "MGT 659", "title": "Business Organizations", "session": "fall", "schedule": "T  Th 10:10 AM-12:00 PM", "professor": "Macey, Jonathan", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 104}, 
+            {"code": "MGT 660", "title": "Mission-Driven Innovation", "session": "fall", "schedule": "Th 1:30 PM-3:20 PM", "professor": "Chahine, Teresa", "credits": 4.0, "theme": "Entrepreneurship & PE", "category": "Elective", "id": 105}, 
+            {"code": "MGT 667", "title": "Secured Transactions", "session": "fall", "schedule": "M  W 4:10 PM-5:35 PM", "professor": "Brunstad, George", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 106}, 
+            {"code": "MGT 669", "title": "Healthcare Economics", "session": "fall", "schedule": "TBD", "professor": "Abaluck, Jason", "credits": 2.0, "theme": "Finance & Economics", "category": "EMBA", "id": 107}, 
+            {"code": "MGT 680", "title": "Population Health 0 Health Equity", "session": "fall", "schedule": "TBD", "professor": "Richards, Bradley", "credits": 2.0, "theme": "Finance & Economics", "category": "EMBA", "id": 108}, 
+            {"code": "MGT 688", "title": "Corporate Sustainability: Strategy and Management", "session": "fall", "schedule": "M  W 2:35 PM-3:55 PM", "professor": "Esty, Daniel", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 109}, 
+            {"code": "MGT 691", "title": "Navigating Through Workplace Culture", "session": "fall", "schedule": "TBD", "professor": "Tsung, Wendy", "credits": 0.5, "theme": "Others", "category": "Elective", "id": 110}, 
+            {"code": "MGT 695 ", "title": "Introduction to AI Applications", "session": "fall", "schedule": "T  Th 11:35 AM-12:50 PM", "professor": "Chen, Xiuye", "credits": 4.0, "theme": "Technology & AI", "category": "Elective", "id": 111}, 
+            {"code": "MGT 696", "title": "Debating Globalization", "session": "fall", "schedule": "M 9:25 AM-11:20 AM", "professor": "Zedillo, Ernesto", "credits": 4.0, "theme": "International", "category": "Elective", "id": 112}, 
+            {"code": "MGT 698", "title": "Healthcare Policy, Finance, & Economics", "session": "fall", "schedule": "TBD", "professor": "Forman, Howard", "credits": 2.0, "theme": "Finance & Economics", "category": "EMBA", "id": 113}, 
+            {"code": "MGT 699", "title": "Colloquium in Healthcare Leadership", "session": "fall", "schedule": "Th 6:30 PM-7:30 PM", "professor": "Forman, Howard", "credits": 1.0, "theme": "Specific Industries", "category": "Elective", "id": 114}, 
+            {"code": "MGT 810", "title": "Risk, Intelligence and Decision-Making", "session": "fall", "schedule": "TBD", "professor": "Cort, Todd", "credits": 2.0, "theme": "Finance & Economics", "category": "EMBA", "id": 115}, 
+            {"code": "MGT 814", "title": "Tax & Financial Perspective", "session": "fall", "schedule": "TBD", "professor": "Thomas, Jacob", "credits": 2.0, "theme": "Finance & Economics", "category": "EMBA", "id": 116}, 
+            {"code": "MGT 815", "title": "Managerial Controls", "session": "fall", "schedule": "TBD", "professor": "Steffen, Thomas", "credits": 2.0, "theme": "Accounting & Operations", "category": "EMBA", "id": 117}, 
+            {"code": "MGT 817", "title": "Sports Analytics", "session": "fall", "schedule": "T 4:10 PM-7:10 PM", "professor": "Moskowitz, Tobias", "credits": 4.0, "theme": "Accounting & Operations", "category": "Elective", "id": 118}, 
+            {"code": "MGT 823", "title": "Risk, Insurance and Finance for Households and Small Enterprises", "session": "fall", "schedule": "T  Th 10:05 AM-11:25 AM", "professor": "Jensen, Robert", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 119}, 
+            {"code": "MGT 837", "title": "Policy Design", "session": "fall", "schedule": "M  W 2:35 PM-3:55 PM", "professor": "Abaluck, Jason", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 120}, 
+            {"code": "MGT 860", "title": "Generative AI for Managers", "session": "fall", "schedule": "TBD", "professor": "Sudhir, K.", "credits": 2.0, "theme": "Technology & AI", "category": "EMBA", "id": 121}, 
+            {"code": "MGT 867", "title": "Money, Power, and Purpose: Philanthropy in a Changing World", "session": "fall", "schedule": "Th 2:35 PM-5:35 PM", "professor": "Maclean, Paige", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 122}, 
+            {"code": "MGT 869", "title": "Global Health", "session": "fall", "schedule": "TBD", "professor": "Paintsil, Elijah", "credits": 2.0, "theme": "Specific Industries", "category": "EMBA", "id": 123}, 
+            {"code": "MGT 889", "title": "Strategic Social Networks", "session": "fall", "schedule": "TBD", "professor": "Kim, Minjae", "credits": 2.0, "theme": "Society, Law & Environment", "category": "EMBA", "id": 124}, 
+            {"code": "MGT 890", "title": "Global Financial Crisis", "session": "fall", "schedule": "T  Th 1:00 PM-2:20 PM", "professor": "Metrick, Andrew", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 125}, 
+            {"code": "MGT 921", "title": "Asset Management Colloquium", "session": "fall", "schedule": "F 11:30 AM-1:30 PM", "professor": "Moskowitz, Tobias", "credits": 2.0, "theme": "Finance & Economics", "category": "MMS", "id": 126}, 
+            {"code": "MGT 934", "title": "Applied Security Analysis", "session": "fall", "schedule": "Th 4:10 PM-7:10 PM", "professor": "Johnson, Paul", "credits": 4.0, "theme": "Others", "category": "MMS", "id": 127}, 
+            {"code": "MGT 948", "title": "Security Analysis & Valuation", "session": "fall", "schedule": "M  W 10:05 AM-11:25 AM", "professor": "Spiegel, Matthew", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 128}, 
+            {"code": "MGT 949", "title": "Systemic-Risk Colloquium", "session": "fall", "schedule": "F 2:00 PM-3:20 PM", "professor": "Metrick, Andrew", "credits": 2.0, "theme": "Finance & Economics", "category": "MMS", "id": 129}, 
+            {"code": "MGT 984", "title": "Studies in Grand Strategy II", "session": "fall", "schedule": "W 1:30 PM-3:25 PM", "professor": "Sarotte, Mary", "credits": 4.0, "theme": "Society, Law & Environment", "category": "Elective", "id": 130}, 
+            {"code": "MGT 992", "title": "Health Care Strategy", "session": "fall", "schedule": "M  W 4:10 PM-5:30 PM", "professor": "Abaluck, Jason", "credits": 4.0, "theme": "Finance & Economics", "category": "Elective", "id": 131}
+        ];
+
+        const themeIcons = {
+            "Organizational Behavior & HR": "users", "Accounting & Operations": "calculator",
+            "Entrepreneurship & PE": "rocket", "Strategy & Marketing": "target",
+            "Finance & Economics": "trending-up", "Specific Industries": "building-2",
+            "International": "globe", "Society, Law & Environment": "scale",
+            "Technology & AI": "cpu", "Others": "more-horizontal"
+        };
+
+        // --- APP STATE ---
+        let activeTab = 'catalog'; 
+        let selectedCourses = [...mandatoryCourses];
+        let shortlistedCourses = []; 
+        let expandedThemes = new Set(); // Start collapsed!
+        let currentSearchQuery = "";
+        const MAX_CREDITS = 40;
+
+        function setTab(tabName) { activeTab = tabName; renderApp(); }
+
+        function toggleTheme(themeName) {
+            if(expandedThemes.has(themeName)) expandedThemes.delete(themeName);
+            else expandedThemes.add(themeName);
+            renderApp();
+        }
+
+        // --- CORE ACTIONS ---
+        function toggleFav(id) {
+            const numId = parseInt(id);
+            const index = shortlistedCourses.findIndex(c => c.id === numId);
+            if (index > -1) {
+                shortlistedCourses.splice(index, 1); 
+            } else {
+                const course = electiveCourses.find(c => c.id === numId);
+                if(course && !selectedCourses.find(c => c.id === numId)) {
+                    shortlistedCourses.push(course); 
+                }
+            }
+            renderApp();
+        }
+
+        function addCourse(id) {
+            const numId = parseInt(id);
+            const course = electiveCourses.find(c => c.id === numId);
+            if (course && !selectedCourses.find(c => c.id === numId)) {
+                selectedCourses.push(course);
+                shortlistedCourses = shortlistedCourses.filter(c => c.id !== numId); 
+                renderApp();
+            }
+        }
+
+        function removeCourse(id) {
+            selectedCourses = selectedCourses.filter(c => c.id !== id || c.isMandatory);
+            renderApp();
+        }
+
+        function moveToSandbox(id) {
+            const numId = parseInt(id);
+            const courseIndex = selectedCourses.findIndex(c => c.id === numId && !c.isMandatory);
+            if (courseIndex > -1) {
+                const course = selectedCourses[courseIndex];
+                selectedCourses.splice(courseIndex, 1);
+                if (!shortlistedCourses.find(c => c.id === numId)) shortlistedCourses.push(course);
+                renderApp();
+            }
+        }
+
+        function moveToGrid(id) {
+            const numId = parseInt(id);
+            const courseIndex = shortlistedCourses.findIndex(c => c.id === numId);
+            if (courseIndex > -1) {
+                const course = shortlistedCourses[courseIndex];
+                shortlistedCourses.splice(courseIndex, 1);
+                if (!selectedCourses.find(c => c.id === numId)) selectedCourses.push(course);
+                renderApp();
+            }
+        }
+
+        // --- DRAG AND DROP EVENTS ---
+        function drag(ev, id) { ev.dataTransfer.setData("courseId", id); }
+        function allowDrop(ev, zone) {
+            ev.preventDefault();
+            ev.currentTarget.classList.add(zone === 'sandbox' ? 'sandbox-drag-over' : 'drag-over');
+        }
+        function dragLeave(ev, zone) { ev.currentTarget.classList.remove(zone === 'sandbox' ? 'sandbox-drag-over' : 'drag-over'); }
+        function dropSandbox(ev) {
+            ev.preventDefault();
+            ev.currentTarget.classList.remove('sandbox-drag-over');
+            const id = ev.dataTransfer.getData("courseId");
+            if(id) moveToSandbox(id);
+        }
+        function dropGrid(ev) {
+            ev.preventDefault();
+            ev.currentTarget.classList.remove('drag-over');
+            const id = ev.dataTransfer.getData("courseId");
+            if(id) moveToGrid(id);
+        }
+
+        // --- UTILS ---
+        function getCreditsCount() { return selectedCourses.reduce((sum, c) => sum + c.credits, 0); }
+        function extractDays(scheduleStr) {
+            let days = [];
+            if (!scheduleStr || scheduleStr === 'TBD') return days;
+            const tokens = scheduleStr.replace(/[^a-zA-Z]/g, ' ').split(/\s+/);
+            if (tokens.includes('M')) days.push('Monday');
+            if (tokens.includes('T')) days.push('Tuesday');
+            if (tokens.includes('W')) days.push('Wednesday');
+            if (tokens.includes('Th')) days.push('Thursday');
+            if (tokens.includes('F')) days.push('Friday');
+            return days;
+        }
+        function handleSearch(event) { 
+            currentSearchQuery = event.target.value.toLowerCase(); 
+            // Optional: If searching, auto-expand themes to see results
+            if(currentSearchQuery.length > 2) expandedThemes = new Set(Object.keys(themeIcons));
+            if(currentSearchQuery.length === 0) expandedThemes = new Set();
+            renderApp(); 
+        }
+
+        // --- HTML RENDERERS ---
+        function getHeaderHTML() {
+            return `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center py-5 px-4 md:px-10 gap-3">
+                    <div class="text-gray-500 font-bold tracking-widest text-sm flex items-center gap-2">
+                        <span>CURRICULUM PLAN</span> <span class="text-gray-300">|</span> <span>FULL FALL SEMESTER</span>
+                    </div>
+                    <div class="text-2xl font-black flex items-center gap-1">
+                        <span class="text-yale-blue">Yale</span><span class="text-gray-900 font-light">SOM</span>
+                    </div>
+                </div>
+                <div class="slide-header-bar py-4 px-4 md:px-10 shadow-sm mb-6 flex flex-col md:flex-row md:items-end justify-between">
+                    <div>
+                        <span class="text-blue-200 text-xs font-bold tracking-widest uppercase mb-1 block">YALE SOM 2026</span>
+                        <h1 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Curriculum Planner & Sandbox</h1>
+                    </div>
+                    <div class="mt-2 md:mt-0 text-left md:text-right text-blue-100 flex flex-col items-end">
+                        <p class="text-xs font-bold uppercase tracking-widest opacity-80 mb-1">Selected Credits</p>
+                        <div class="bg-blue-900/40 px-3 py-1 rounded text-white font-black text-xl">
+                            ${getCreditsCount()} <span class="text-sm font-normal opacity-80">/ 40</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getTabsHTML() {
+            const isCat = activeTab === 'catalog';
+            return `
+                <div class="px-4 md:px-10 mb-6">
+                    <div class="flex p-1.5 bg-gray-200/60 rounded-xl w-full md:w-fit border border-gray-200 shadow-inner">
+                        <button onclick="setTab('catalog')" class="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 ${isCat ? 'bg-white text-yale-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+                            <i data-lucide="layout-grid" class="w-4 h-4"></i> Course Catalog
+                        </button>
+                        <button onclick="setTab('planner')" class="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 ${!isCat ? 'bg-white text-yale-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+                            <i data-lucide="calendar-days" class="w-4 h-4"></i> Weekly Planner & Sandbox
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function generateCourseCard(course, isFav) {
+            let badgeColor = "bg-gray-100 text-gray-500";
+            if(course.category === "EMBA") badgeColor = "bg-blue-100 text-blue-800";
+            if(course.category === "PhD") badgeColor = "bg-red-100 text-red-800";
+            if(course.category === "Core") badgeColor = "bg-yellow-100 text-yellow-800";
+            if(course.category === "MMS") badgeColor = "bg-purple-100 text-purple-800";
+            if(course.category === "Global Network") badgeColor = "bg-teal-100 text-teal-800";
+
+            return `
+                <div class="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-blue-50/30 transition-colors">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2 mb-1">
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide bg-gray-100 text-gray-800">${course.code}</span>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${badgeColor}">${course.category || 'Course'}</span>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${course.session.includes('fall-1') ? 'bg-orange-100 text-orange-600' : (course.session.includes('fall-2') ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600')}">${course.session}</span>
+                        </div>
+                        <h4 class="font-bold text-gray-800 text-sm leading-tight">${course.title}</h4>
+                        <p class="text-[11px] text-gray-500 mt-1 flex items-center gap-1.5"><i data-lucide="clock" class="w-3 h-3"></i> ${course.schedule === 'TBD' || !course.schedule ? 'Schedule TBD' : course.schedule}</p>
+                        <p class="text-[11px] text-gray-500 flex items-center gap-1.5"><i data-lucide="user" class="w-3 h-3"></i> ${course.professor}</p>
+                    </div>
+                    <div class="flex items-center gap-3 ml-4 shrink-0">
+                        <span class="font-black text-gray-700 text-sm w-8 text-right hidden sm:block">${course.credits} cr</span>
+                        
+                        <button onclick="toggleFav(${course.id})" class="p-2 rounded-full transition-colors focus:outline-none ${isFav ? 'bg-orange-100 text-orange-500' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}" title="Add/Remove from Shortlist">
+                            <i data-lucide="heart" class="w-4 h-4 ${isFav ? 'fill-current text-orange-500' : ''}"></i>
+                        </button>
+                        
+                        <button onclick="addCourse(${course.id})" class="text-xs bg-white border border-gray-300 hover:border-yale-accent hover:text-yale-accent px-3 py-2 rounded-md font-bold transition-colors shadow-sm">
+                            + Add
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getCatalogHTML() {
+            const filteredCourses = electiveCourses.filter(course => {
+                const searchStr = `${course.title} ${course.code} ${course.professor} ${course.category} ${course.theme}`.toLowerCase();
+                return searchStr.includes(currentSearchQuery);
+            });
+
+            // 1. Render Shortlist Block at the top
+            let shortlistHTML = '';
+            if (shortlistedCourses.length > 0 && currentSearchQuery === "") {
+                const favCards = shortlistedCourses.map(course => generateCourseCard(course, true)).join('');
+                shortlistHTML = `
+                    <div class="mb-6 bg-orange-50/50 rounded-xl shadow-sm border border-orange-200 overflow-hidden transition-all duration-200 animate-fade-in">
+                        <div class="p-4 flex items-center gap-3 bg-orange-100/50 border-b border-orange-200">
+                            <div class="w-8 h-8 bg-white border border-orange-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm"><i data-lucide="heart" class="w-4 h-4 text-orange-500 fill-current"></i></div>
+                            <h3 class="font-extrabold text-orange-900 text-sm md:text-base">My Shortlist (Favorites) <span class="text-xs text-orange-700/70 font-normal ml-1">(${shortlistedCourses.length})</span></h3>
+                        </div>
+                        <div class="p-2 bg-white">${favCards}</div>
+                    </div>
+                `;
+            }
+
+            // 2. Render normal grouped catalog
+            const grouped = {};
+            Object.keys(themeIcons).forEach(t => grouped[t] = []);
+            
+            filteredCourses.forEach(course => {
+                if(!selectedCourses.find(c => c.id === course.id)) {
+                    if (grouped[course.theme]) grouped[course.theme].push(course);
+                    else grouped['Others'].push(course);
+                }
+            });
+
+            const blocksHTML = Object.keys(grouped).map(themeName => {
+                const courses = grouped[themeName];
+                if(courses.length === 0) return ''; 
+                const isExpanded = expandedThemes.has(themeName);
+                const icon = themeIcons[themeName] || "more-horizontal";
+
+                const courseCards = courses.map(course => {
+                    const isFav = shortlistedCourses.find(c => c.id === course.id);
+                    return generateCourseCard(course, isFav);
+                }).join('');
+
+                return `
+                    <div class="mb-4 bg-white rounded-xl shadow-sm border ${isExpanded ? 'border-blue-200 ring-1 ring-blue-50' : 'border-gray-200 hover:border-gray-300'} overflow-hidden transition-all duration-200">
+                        <div class="p-4 cursor-pointer select-none flex justify-between items-center bg-gray-50/50 hover:bg-gray-50" onclick="toggleTheme('${themeName}')">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm"><i data-lucide="${icon}" class="w-4 h-4 text-yale-blue"></i></div>
+                                <h3 class="font-extrabold text-gray-900 text-sm md:text-base">${themeName} <span class="text-xs text-gray-400 font-normal ml-1">(${courses.length})</span></h3>
+                            </div>
+                            <i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}" class="w-4 h-4 ${isExpanded ? 'text-yale-blue' : 'text-gray-400'}"></i>
+                        </div>
+                        <div class="track-content ${isExpanded ? 'expanded' : ''} border-t border-gray-100 bg-white">
+                            <div class="track-inner"><div class="p-2">${courseCards}</div></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const currentCredits = getCreditsCount();
+            let barColor = 'bg-yale-blue';
+            if (currentCredits > MAX_CREDITS) barColor = 'bg-red-500';
+            else if (currentCredits === MAX_CREDITS) barColor = 'bg-green-500';
+
+            const selectedCards = selectedCourses.map(course => `
+                <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-2 flex justify-between items-center ${course.isMandatory ? 'border-l-4 border-l-gray-400' : 'border-l-4 border-l-yale-accent'}">
+                    <div class="pr-2">
+                        ${course.isMandatory ? `<span class="text-[9px] font-bold bg-gray-200 text-gray-600 px-1 py-0.5 rounded uppercase">CORE / MANDATORY</span>` : ''}
+                        <h4 class="font-bold text-gray-800 text-xs mt-1 leading-tight">${course.code} - ${course.title}</h4>
+                        <span class="text-[10px] text-gray-500 block mt-1">${course.session} | ${course.schedule === 'TBD' ? 'Schedule TBD' : course.schedule}</span>
+                    </div>
+                    <div class="flex flex-col items-end shrink-0 gap-1">
+                        <span class="font-bold text-sm text-gray-700">${course.credits} cr</span>
+                        ${!course.isMandatory ? `<button onclick="removeCourse(${course.id})" class="text-red-500 hover:text-red-700 text-[10px] font-bold uppercase tracking-wider">Remove</button>` : '<i data-lucide="lock" class="w-3 h-3 text-gray-400 mt-1"></i>'}
+                    </div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="px-4 md:px-10 mb-8 animate-fade-in grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-8">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex items-center gap-3">
+                            <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+                            <input type="text" id="searchInput" placeholder="Search by name, code (e.g. MGT 860), professor, theme..." 
+                                class="w-full text-sm outline-none text-gray-700 placeholder-gray-400"
+                                onkeyup="handleSearch(event)" value="${currentSearchQuery}">
+                        </div>
+                        ${shortlistHTML}
+                        ${blocksHTML || `<p class="text-center text-gray-500 mt-10">No courses found with that search criteria.</p>`}
+                    </div>
+                    <div class="lg:col-span-4">
+                        <div class="bg-gray-100 rounded-2xl p-5 border border-gray-200 sticky top-4">
+                            <h2 class="text-lg font-extrabold text-gray-900 mb-1">Formal Curriculum</h2>
+                            <p class="text-xs text-gray-500 mb-4">These count towards your credit limit.</p>
+                            <div class="mb-5 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                <div class="flex justify-between items-end mb-1 text-sm font-bold text-gray-700">
+                                    <span>Progress</span><span class="${currentCredits > MAX_CREDITS ? 'text-red-500' : 'text-gray-900'}">${currentCredits} / ${MAX_CREDITS} cr</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2"><div class="${barColor} h-2 rounded-full transition-all duration-300" style="width: ${Math.min((currentCredits/MAX_CREDITS)*100, 100)}%"></div></div>
+                                ${currentCredits > MAX_CREDITS ? '<p class="text-[10px] text-red-500 font-bold mt-2">⚠️ Limit exceeded</p>' : ''}
+                            </div>
+                            <div class="custom-scrollbar overflow-y-auto max-h-[500px] pr-1">${selectedCards}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getPlannerHTML() {
+            const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            
+            const renderWeekGrid = (title, filterTerm, highlightColor) => {
+                const termCourses = selectedCourses.filter(c => c.session === filterTerm || c.session === 'fall');
+                const gridData = { 'Monday':[], 'Tuesday':[], 'Wednesday':[], 'Thursday':[], 'Friday':[], 'No Schedule / TBD':[] };
+                
+                termCourses.forEach(course => {
+                    const days = extractDays(course.schedule);
+                    if (days.length === 0) gridData['No Schedule / TBD'].push(course);
+                    else days.forEach(d => { if(gridData[d]) gridData[d].push(course); });
+                });
+
+                const colsHTML = daysOfWeek.map(day => {
+                    const cardsHTML = gridData[day].map(c => `
+                        <div draggable="${!c.isMandatory}" ondragstart="drag(event, ${c.id})" class="bg-white p-2.5 rounded-lg border-l-4 ${c.isMandatory ? 'border-l-gray-400 opacity-90' : 'border-l-yale-accent cursor-grab hover:shadow-md hover:-translate-y-0.5'} transition-all shadow-sm border border-gray-100 mb-2 relative group">
+                            <span class="text-[9px] block text-gray-500 font-bold mb-0.5">${c.schedule}</span>
+                            <span class="text-[10px] font-bold text-gray-800 leading-tight block mb-1">${c.code}</span>
+                            <p class="text-[9px] text-gray-600 line-clamp-2 leading-tight">${c.title}</p>
+                            ${!c.isMandatory ? `<button onclick="moveToSandbox(${c.id})" class="md:hidden group-hover:block absolute top-1 right-1 text-gray-300 hover:text-orange-500 transition-colors" title="Move to Sandbox"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i></button>` : ''}
+                        </div>
+                    `).join('');
+
+                    return `
+                        <div class="flex-1 min-w-[130px] bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col">
+                            <div class="bg-gray-100 py-2 text-center border-b border-gray-200"><span class="text-[11px] font-black uppercase tracking-widest text-gray-500">${day}</span></div>
+                            <div class="p-2 flex-grow">${cardsHTML || `<div class="text-center mt-4"><span class="text-[10px] text-gray-400 italic">Free</span></div>`}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                const tbdHTML = gridData['No Schedule / TBD'].length > 0 ? `
+                    <div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <h4 class="text-xs font-bold text-yellow-800 mb-2 uppercase tracking-wide">📅 Formal Courses with No Schedule (TBD)</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${gridData['No Schedule / TBD'].map(c => `
+                                <div draggable="${!c.isMandatory}" ondragstart="drag(event, ${c.id})" class="bg-white border border-yellow-300 text-yellow-900 text-[10px] px-2 py-1 rounded shadow-sm flex items-center gap-2 group ${c.isMandatory ? '' : 'cursor-grab hover:-translate-y-0.5 transition-transform'}">
+                                    <span><b>${c.code}</b>: ${c.title}</span>
+                                    ${!c.isMandatory ? `<button onclick="moveToSandbox(${c.id})" class="text-yellow-600 hover:text-orange-500 hidden group-hover:block" title="Move to Sandbox"><i data-lucide="x-circle" class="w-3 h-3"></i></button>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : '';
+
+                return `
+                    <div class="mb-6 bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-200 relative overflow-hidden transition-colors duration-200">
+                        <div class="absolute left-0 top-0 bottom-0 w-1.5 ${highlightColor}"></div>
+                        <h3 class="text-lg font-extrabold text-gray-900 mb-4 ml-2 flex items-center gap-2"><i data-lucide="calendar" class="w-5 h-5 text-gray-400"></i> ${title}</h3>
+                        <div class="flex flex-col lg:flex-row gap-2 overflow-x-auto pb-2 custom-scrollbar">${colsHTML}</div>
+                        ${tbdHTML}
+                    </div>
+                `;
+            };
+
+            const generateSandboxCard = (c, isFormal) => `
+                <div draggable="true" ondragstart="drag(event, ${c.id})" class="bg-white p-3 rounded-lg border-l-4 ${isFormal ? 'border-l-yale-accent border border-blue-200' : 'border-l-orange-400 border border-gray-200'} shadow-sm mb-3 cursor-grab hover:shadow-md hover:-translate-y-0.5 transition-all relative group">
+                    <div class="flex justify-between items-start">
+                        <div class="pr-6">
+                            <span class="text-[9px] font-bold px-1 py-0.5 ${isFormal ? 'bg-blue-50 text-yale-accent' : 'bg-orange-50 text-orange-600'} rounded uppercase mb-1 inline-block">${c.session}</span>
+                            <span class="text-[10px] font-bold text-gray-800 leading-tight block mb-0.5">${c.code}</span>
+                            <p class="text-[10px] text-gray-600 leading-tight mb-1">${c.title}</p>
+                            <span class="text-[9px] block text-gray-400 font-bold">${c.schedule === 'TBD' || !c.schedule ? 'Schedule TBD' : c.schedule}</span>
+                        </div>
+                    </div>
+                    ${!isFormal ? `
+                        <button onclick="moveToGrid(${c.id})" class="md:hidden group-hover:flex absolute top-1.5 right-1.5 w-6 h-6 bg-gray-100 rounded-full items-center justify-center text-gray-500 hover:text-yale-accent hover:bg-blue-50 transition-colors" title="Add to Grid">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button onclick="toggleFav(${c.id})" class="md:hidden group-hover:flex absolute bottom-1.5 right-1.5 w-6 h-6 items-center justify-center text-gray-300 hover:text-red-500 transition-colors" title="Remove from Sandbox">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    ` : `
+                        <div class="absolute top-2 right-2 text-yale-accent" title="Currently Scheduled"><i data-lucide="calendar-check" class="w-4 h-4"></i></div>
+                    `}
+                </div>
+            `;
+
+            const scheduledSandboxCards = selectedCourses.filter(c => !c.isMandatory).map(c => generateSandboxCard(c, true)).join('');
+            const unscheduledSandboxCards = shortlistedCourses.map(c => generateSandboxCard(c, false)).join('');
+
+            return `
+                <div class="px-4 md:px-10 mb-10 animate-fade-in">
+                    <div class="mb-6 flex items-start md:items-center bg-blue-50 text-blue-800 p-4 rounded-xl border border-blue-100">
+                        <i data-lucide="info" class="w-5 h-5 mr-3 shrink-0 mt-0.5 md:mt-0"></i>
+                        <p class="text-xs md:text-sm font-medium">You can <strong>drag and drop</strong> courses between the Sandbox and the Calendar to draft your schedule. Courses marked as "fall" span the entire semester.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        
+                        <!-- Sandbox Column -->
+                        <div class="lg:col-span-3">
+                            <div class="bg-gray-100 rounded-2xl p-4 border border-gray-200 h-full min-h-[500px] flex flex-col transition-colors duration-200" 
+                                 ondrop="dropSandbox(event)" ondragover="allowDrop(event, 'sandbox')" ondragleave="dragLeave(event, 'sandbox')">
+                                <h2 class="text-lg font-extrabold text-gray-900 flex items-center gap-2 mb-1">
+                                    <i data-lucide="box" class="w-5 h-5 text-orange-500"></i> My Sandbox
+                                </h2>
+                                <p class="text-[11px] text-gray-500 mb-4 border-b border-gray-200 pb-3">All your selected & favorited courses.</p>
+                                
+                                <div class="flex-grow overflow-y-auto custom-scrollbar pr-1">
+                                    ${unscheduledSandboxCards.length > 0 ? `
+                                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 mt-1">Shortlist (Drafts)</h4>
+                                        ${unscheduledSandboxCards}
+                                    ` : ''}
+
+                                    ${scheduledSandboxCards.length > 0 ? `
+                                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 mt-4">Formal Selection</h4>
+                                        ${scheduledSandboxCards}
+                                    ` : ''}
+
+                                    ${unscheduledSandboxCards.length === 0 && scheduledSandboxCards.length === 0 ? `
+                                        <div class="flex flex-col items-center justify-center h-40 text-center opacity-60">
+                                            <i data-lucide="folder-open" class="w-8 h-8 text-gray-400 mb-2"></i>
+                                            <p class="text-xs text-gray-500">No courses here yet.</p>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Grid Column -->
+                        <div class="lg:col-span-9" ondrop="dropGrid(event)" ondragover="allowDrop(event, 'grid')" ondragleave="dragLeave(event, 'grid')">
+                            <div class="pointer-events-none absolute inset-0 z-0"></div>
+                            ${renderWeekGrid("Fall 1 (First Half)", "fall-1", "bg-orange-500")}
+                            ${renderWeekGrid("Fall 2 (Second Half)", "fall-2", "bg-purple-500")}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- MAIN LOOP ---
+        function renderApp() {
+            const app = document.getElementById('app');
+            let contentHTML = activeTab === 'catalog' ? getCatalogHTML() : getPlannerHTML();
+            app.innerHTML = getHeaderHTML() + getTabsHTML() + contentHTML;
+            if(activeTab === 'catalog') {
+                const searchInput = document.getElementById('searchInput');
+                if(searchInput) { searchInput.focus(); searchInput.setSelectionRange(currentSearchQuery.length, currentSearchQuery.length); }
+            }
+            lucide.createIcons();
+        }
+
+        renderApp();
+    </script>
+</body>
+</html>
